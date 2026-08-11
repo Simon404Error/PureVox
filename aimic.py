@@ -195,6 +195,24 @@ _ap_is_recording_enabled = _fn("audio_processor_is_recording_enabled", _c_bool, 
 _ap_get_agc_gain_db = _fn("audio_processor_get_agc_gain_db", _c_float, _c_void_p)
 _ap_set_agc_target = _fn("audio_processor_set_agc_target", None, _c_void_p, _c_float)
 _ap_get_agc_target = _fn("audio_processor_get_agc_target", _c_float, _c_void_p)
+_ap_set_agc_attack_ms = _fn("audio_processor_set_agc_attack_ms", None, _c_void_p, _c_float)
+_ap_get_agc_attack_ms = _fn("audio_processor_get_agc_attack_ms", _c_float, _c_void_p)
+_ap_set_agc_release_ms = _fn("audio_processor_set_agc_release_ms", None, _c_void_p, _c_float)
+_ap_get_agc_release_ms = _fn("audio_processor_get_agc_release_ms", _c_float, _c_void_p)
+_ap_set_noise_gate_enabled = _fn("audio_processor_set_noise_gate_enabled", None, _c_void_p, _c_bool)
+_ap_is_noise_gate_enabled = _fn("audio_processor_is_noise_gate_enabled", _c_bool, _c_void_p)
+_ap_set_noise_gate_offset_db = _fn("audio_processor_set_noise_gate_offset_db", None, _c_void_p, _c_float)
+_ap_get_noise_gate_offset_db = _fn("audio_processor_get_noise_gate_offset_db", _c_float, _c_void_p)
+_ap_get_noise_floor_db = _fn("audio_processor_get_noise_floor_db", _c_float, _c_void_p)
+_ap_set_agc_attack_ms = _fn("audio_processor_set_agc_attack_ms", None, _c_void_p, _c_float)
+_ap_get_agc_attack_ms = _fn("audio_processor_get_agc_attack_ms", _c_float, _c_void_p)
+_ap_set_agc_release_ms = _fn("audio_processor_set_agc_release_ms", None, _c_void_p, _c_float)
+_ap_get_agc_release_ms = _fn("audio_processor_get_agc_release_ms", _c_float, _c_void_p)
+_ap_set_noise_gate_enabled = _fn("audio_processor_set_noise_gate_enabled", None, _c_void_p, _c_bool)
+_ap_is_noise_gate_enabled = _fn("audio_processor_is_noise_gate_enabled", _c_bool, _c_void_p)
+_ap_set_noise_gate_offset_db = _fn("audio_processor_set_noise_gate_offset_db", None, _c_void_p, _c_float)
+_ap_get_noise_gate_offset_db = _fn("audio_processor_get_noise_gate_offset_db", _c_float, _c_void_p)
+_ap_get_noise_floor_db = _fn("audio_processor_get_noise_floor_db", _c_float, _c_void_p)
 _ap_set_comp_enabled = _fn("audio_processor_set_compressor_enabled", None, _c_void_p, _c_bool)
 _ap_is_comp_enabled = _fn("audio_processor_is_compressor_enabled", _c_bool, _c_void_p)
 _ap_set_comp_threshold = _fn("audio_processor_set_compressor_threshold", None, _c_void_p, _c_float)
@@ -633,6 +651,64 @@ class AudioProcessor:
 
     def get_agc_target(self):
         return float(_ap_get_agc_target(self._p))
+
+    # -- AGC time parameters --
+    def set_agc_attack_ms(self, ms):
+        _ap_set_agc_attack_ms(self._p, float(ms))
+
+    def get_agc_attack_ms(self):
+        return float(_ap_get_agc_attack_ms(self._p))
+
+    def set_agc_release_ms(self, ms):
+        _ap_set_agc_release_ms(self._p, float(ms))
+
+    def get_agc_release_ms(self):
+        return float(_ap_get_agc_release_ms(self._p))
+
+    # -- Noise gate --
+    def set_noise_gate_enabled(self, en):
+        _ap_set_noise_gate_enabled(self._p, bool(en))
+
+    def is_noise_gate_enabled(self):
+        return bool(_ap_is_noise_gate_enabled(self._p))
+
+    def set_noise_gate_offset_db(self, db):
+        _ap_set_noise_gate_offset_db(self._p, float(db))
+
+    def get_noise_gate_offset_db(self):
+        return float(_ap_get_noise_gate_offset_db(self._p))
+
+    def get_noise_floor_db(self):
+        return float(_ap_get_noise_floor_db(self._p))
+
+    # ── AGC time parameters ──
+    def set_agc_attack_ms(self, ms):
+        _ap_set_agc_attack_ms(self._p, float(ms))
+
+    def get_agc_attack_ms(self):
+        return float(_ap_get_agc_attack_ms(self._p))
+
+    def set_agc_release_ms(self, ms):
+        _ap_set_agc_release_ms(self._p, float(ms))
+
+    def get_agc_release_ms(self):
+        return float(_ap_get_agc_release_ms(self._p))
+
+    # ── Noise gate ──
+    def set_noise_gate_enabled(self, en):
+        _ap_set_noise_gate_enabled(self._p, bool(en))
+
+    def is_noise_gate_enabled(self):
+        return bool(_ap_is_noise_gate_enabled(self._p))
+
+    def set_noise_gate_offset_db(self, db):
+        _ap_set_noise_gate_offset_db(self._p, float(db))
+
+    def get_noise_gate_offset_db(self):
+        return float(_ap_get_noise_gate_offset_db(self._p))
+
+    def get_noise_floor_db(self):
+        return float(_ap_get_noise_floor_db(self._p))
 
     # ── Compressor ──
     def set_compressor_enabled(self, enabled):

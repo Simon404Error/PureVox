@@ -447,6 +447,9 @@ struct AgcController {
     float attack_alpha_;
     float release_alpha_;
     float decay_factor_;
+    float call_interval_ms_;
+    float attack_ms_;
+    float release_ms_;
     float dead_zone_;
     float rms_alpha_;
     float smoothed_gain_linear_;
@@ -475,6 +478,9 @@ AgcController* agc_new(float target_dbfs, float call_interval_ms) {
     a->attack_alpha_ = 1.0f - (float)exp(-dt / 0.010);
     a->release_alpha_ = 1.0f - (float)exp(-dt / 0.150);
     a->decay_factor_ = (float)pow(0.5, dt);
+    a->call_interval_ms_ = call_interval_ms;
+    a->attack_ms_ = 10.0f;
+    a->release_ms_ = 150.0f;
     a->dead_zone_ = (float)pow(10.0, 0.5 / 20.0);
     a->rms_alpha_ = 1.0f - (float)exp(-dt / 0.200);
     return a;
@@ -555,6 +561,92 @@ void agc_set_target(AgcController* a, float dbfs) {
     a->target_linear_ = (float)pow(10.0, dbfs / 20.0);
 }
 float agc_target_dbfs(const AgcController* a) { return a->target_dbfs_; }
+
+void agc_set_attack_ms(AgcController* a, float ms) {
+    if (ms < 1.0f) ms = 1.0f;
+    if (ms > 500.0f) ms = 500.0f;
+    a->attack_ms_ = ms;
+    float dt = a->call_interval_ms_ / 1000.0f;
+    a->attack_alpha_ = 1.0f - (float)exp(-dt / (ms * 0.001f));
+}
+float agc_get_attack_ms(const AgcController* a) { return a->attack_ms_; }
+
+void agc_set_release_ms(AgcController* a, float ms) {
+    if (ms < 10.0f) ms = 10.0f;
+    if (ms > 1000.0f) ms = 1000.0f;
+    a->release_ms_ = ms;
+    float dt = a->call_interval_ms_ / 1000.0f;
+    a->release_alpha_ = 1.0f - (float)exp(-dt / (ms * 0.001f));
+}
+float agc_get_release_ms(const AgcController* a) { return a->release_ms_; }
+
+/* ---- NoiseFloorTracker ---- */
+struct NoiseFloorTracker {
+    float floor_linear_;
+    float floor_db_;
+    float alpha_rise_;
+    float alpha_fall_;
+    bool initialized_;
+    int silence_frames_;
+    float min_rms_;
+};
+
+NoiseFloorTracker* noise_floor_tracker_new(float call_interval_ms) {
+    NoiseFloorTracker* nt = (NoiseFloorTracker*)calloc(1, sizeof(NoiseFloorTracker));
+    if (!nt) return NULL;
+    float dt = call_interval_ms / 1000.0f;
+    nt->floor_linear_ = 0.0f;
+    nt->floor_db_ = -60.0f;
+    nt->alpha_rise_ = 1.0f - (float)exp(-dt / 2.0f);
+    nt->alpha_fall_ = 1.0f - (float)exp(-dt / 0.5f);
+    nt->initialized_ = false;
+    nt->silence_frames_ = 0;
+    nt->min_rms_ = 1e10f;
+    return nt;
+}
+
+void noise_floor_tracker_free(NoiseFloorTracker* nt) { free(nt); }
+
+void noise_floor_tracker_reset(NoiseFloorTracker* nt) {
+    nt->floor_linear_ = 0.0f;
+    nt->floor_db_ = -60.0f;
+    nt->initialized_ = false;
+    nt->silence_frames_ = 0;
+    nt->min_rms_ = 1e10f;
+}
+
+void noise_floor_tracker_update(NoiseFloorTracker* nt, float rms_linear, bool is_voice_active) {
+    if (is_voice_active) {
+        nt->silence_frames_ = 0;
+        return;
+    }
+    nt->silence_frames_++;
+    if (nt->silence_frames_ < 10) return;
+    if (!nt->initialized_) {
+        nt->floor_linear_ = rms_linear;
+        nt->floor_db_ = 20.0f * (float)log10(rms_linear > 0.0f ? rms_linear : 1e-10f);
+        if (nt->floor_db_ < -80.0f) nt->floor_db_ = -80.0f;
+        nt->min_rms_ = rms_linear;
+        nt->initialized_ = true;
+        return;
+    }
+    if (rms_linear < nt->min_rms_) nt->min_rms_ = rms_linear;
+    if (rms_linear < nt->floor_linear_) {
+        nt->floor_linear_ = nt->alpha_fall_ * rms_linear + (1.0f - nt->alpha_fall_) * nt->floor_linear_;
+    } else {
+        nt->floor_linear_ = nt->alpha_rise_ * rms_linear + (1.0f - nt->alpha_rise_) * nt->floor_linear_;
+    }
+    nt->floor_db_ = 20.0f * (float)log10(nt->floor_linear_ > 0.0f ? nt->floor_linear_ : 1e-10f);
+    if (nt->floor_db_ < -80.0f) nt->floor_db_ = -80.0f;
+}
+
+float noise_floor_tracker_get_floor_db(const NoiseFloorTracker* nt) {
+    return nt->initialized_ ? nt->floor_db_ : -60.0f;
+}
+
+float noise_floor_tracker_get_floor_linear(const NoiseFloorTracker* nt) {
+    return nt->initialized_ ? nt->floor_linear_ : 0.001f;
+}
 
 /* ───────────────────────── Compressor ───────────────────────── */
 struct Compressor {
@@ -1851,6 +1943,9 @@ struct AudioProcessor {
     bool recording_enabled_;
     int backend_effective_;
     int backend_reason_;
+    NoiseFloorTracker* noise_tracker_;
+    float noise_gate_offset_db_;
+    bool noise_gate_enabled_;
 };
 
 static void ap_apply_eq(AudioProcessor* ap, float* data, size_t len) {
@@ -1957,6 +2052,9 @@ AudioProcessor* audio_processor_new(float pre_gain_db, const char* denoise_model
     ap->vad_gate_ = vad_new(-45.0f, 20.0f, 250.0f, 48000.0f, 480);
     ap->agc_ = agc_new(-20.0f, 10.0f);
     ap->compressor_ = compressor_new(-20.0f, 3.0f, 15.0f, 180.0f, 8.0f, 4.0f, 48000.0f);
+    ap->noise_tracker_ = noise_floor_tracker_new(10.0f);
+    ap->noise_gate_offset_db_ = 3.0f;
+    ap->noise_gate_enabled_ = false;
     if (stft_init(&ap->stft_) != 0) {
         audio_processor_free(ap);
         return NULL;
@@ -2130,6 +2228,40 @@ bool audio_processor_is_agc_voice_active(AudioProcessor* ap) { return agc_is_voi
 float audio_processor_get_agc_gain_db(AudioProcessor* ap) { return agc_get_current_gain_db(ap->agc_); }
 void audio_processor_set_agc_target(AudioProcessor* ap, float dbfs) { agc_set_target(ap->agc_, dbfs); }
 float audio_processor_get_agc_target(AudioProcessor* ap) { return agc_target_dbfs(ap->agc_); }
+
+void audio_processor_set_agc_attack_ms(AudioProcessor* ap, float ms) {
+    if (ap->agc_) agc_set_attack_ms(ap->agc_, ms);
+}
+float audio_processor_get_agc_attack_ms(AudioProcessor* ap) {
+    return ap->agc_ ? agc_get_attack_ms(ap->agc_) : 10.0f;
+}
+
+void audio_processor_set_agc_release_ms(AudioProcessor* ap, float ms) {
+    if (ap->agc_) agc_set_release_ms(ap->agc_, ms);
+}
+float audio_processor_get_agc_release_ms(AudioProcessor* ap) {
+    return ap->agc_ ? agc_get_release_ms(ap->agc_) : 150.0f;
+}
+
+void audio_processor_set_noise_gate_enabled(AudioProcessor* ap, bool en) {
+    ap->noise_gate_enabled_ = en;
+}
+bool audio_processor_is_noise_gate_enabled(AudioProcessor* ap) {
+    return ap->noise_gate_enabled_;
+}
+
+void audio_processor_set_noise_gate_offset_db(AudioProcessor* ap, float db) {
+    if (db < 0.0f) db = 0.0f;
+    if (db > 30.0f) db = 30.0f;
+    ap->noise_gate_offset_db_ = db;
+}
+float audio_processor_get_noise_gate_offset_db(AudioProcessor* ap) {
+    return ap->noise_gate_offset_db_;
+}
+
+float audio_processor_get_noise_floor_db(AudioProcessor* ap) {
+    return ap->noise_tracker_ ? noise_floor_tracker_get_floor_db(ap->noise_tracker_) : -60.0f;
+}
 
 void audio_processor_set_recording_enabled(AudioProcessor* ap, bool enabled) {
     ap->recording_enabled_ = enabled;

@@ -707,6 +707,87 @@ class MainPanel(QWidget):
 
         root.addLayout(opts_row)
 
+        # -- AGC params (visible when AGC enabled) --
+        self._agc_params_widget = QWidget()
+        self._agc_params_widget.setVisible(self._config.get("agc_enabled", False))
+        agc_params_layout = QHBoxLayout(self._agc_params_widget)
+        agc_params_layout.setContentsMargins(0, 0, 0, 0)
+        agc_params_layout.setSpacing(4)
+        lbl_target = QLabel("\u76ee\u6807")
+        lbl_target.setFixedWidth(28)
+        self._agc_target_slider = QSlider(Qt.Horizontal)
+        self._agc_target_slider.setRange(-30, -10)
+        self._agc_target_slider.setValue(int(self._config.get("agc_target_db", -20)))
+        self._agc_target_slider.setFixedWidth(60)
+        self._agc_target_slider.setToolTip("AGC target level (dBFS)")
+        self._agc_target_label = QLabel(f"{self._agc_target_slider.value()} dB")
+        self._agc_target_label.setFixedWidth(36)
+        self._agc_target_slider.valueChanged.connect(self._on_agc_target_changed)
+        agc_params_layout.addWidget(lbl_target)
+        agc_params_layout.addWidget(self._agc_target_slider)
+        agc_params_layout.addWidget(self._agc_target_label)
+        lbl_attack = QLabel("\u8d77\u97f3")
+        lbl_attack.setFixedWidth(28)
+        self._agc_attack_slider = QSlider(Qt.Horizontal)
+        self._agc_attack_slider.setRange(5, 200)
+        self._agc_attack_slider.setValue(int(self._config.get("agc_attack_ms", 10)))
+        self._agc_attack_slider.setFixedWidth(60)
+        self._agc_attack_slider.setToolTip("AGC attack time (ms)")
+        self._agc_attack_label = QLabel(f"{self._agc_attack_slider.value()} ms")
+        self._agc_attack_label.setFixedWidth(40)
+        self._agc_attack_slider.valueChanged.connect(self._on_agc_attack_changed)
+        agc_params_layout.addWidget(lbl_attack)
+        agc_params_layout.addWidget(self._agc_attack_slider)
+        agc_params_layout.addWidget(self._agc_attack_label)
+        lbl_release = QLabel("\u91ca\u653e")
+        lbl_release.setFixedWidth(28)
+        self._agc_release_slider = QSlider(Qt.Horizontal)
+        self._agc_release_slider.setRange(50, 500)
+        self._agc_release_slider.setValue(int(self._config.get("agc_release_ms", 150)))
+        self._agc_release_slider.setFixedWidth(60)
+        self._agc_release_slider.setToolTip("AGC release time (ms)")
+        self._agc_release_label = QLabel(f"{self._agc_release_slider.value()} ms")
+        self._agc_release_label.setFixedWidth(40)
+        self._agc_release_slider.valueChanged.connect(self._on_agc_release_changed)
+        agc_params_layout.addWidget(lbl_release)
+        agc_params_layout.addWidget(self._agc_release_slider)
+        agc_params_layout.addWidget(self._agc_release_label)
+        root.addWidget(self._agc_params_widget)
+
+        # -- Noise gate --
+        noise_row = QHBoxLayout()
+        noise_row.setContentsMargins(0, 0, 0, 0)
+        noise_row.setSpacing(4)
+        self._noise_gate_cb = QCheckBox("\u566a\u58f0\u95e8")
+        self._noise_gate_cb.setFixedHeight(22)
+        self._noise_gate_cb.setChecked(self._config.get("noise_gate_enabled", False))
+        self._noise_gate_cb.setToolTip("Adaptive noise gate based on tracked noise floor")
+        self._noise_gate_cb.toggled.connect(self._on_noise_gate_toggled)
+        noise_row.addWidget(self._noise_gate_cb)
+        lbl_nf = QLabel("\u5e95\u566a")
+        lbl_nf.setFixedWidth(28)
+        self._noise_floor_label = QLabel("-- dB")
+        self._noise_floor_label.setFixedWidth(48)
+        self._noise_floor_label.setToolTip("Current noise floor (auto-tracked during silence)")
+        noise_row.addWidget(lbl_nf)
+        noise_row.addWidget(self._noise_floor_label)
+        lbl_offset = QLabel("\u95e8\u9650")
+        lbl_offset.setFixedWidth(28)
+        self._noise_offset_slider = QSlider(Qt.Horizontal)
+        self._noise_offset_slider.setRange(0, 20)
+        self._noise_offset_slider.setValue(int(self._config.get("noise_gate_offset_db", 3)))
+        self._noise_offset_slider.setFixedWidth(60)
+        self._noise_offset_slider.setToolTip("Threshold offset above noise floor (dB)")
+        self._noise_offset_label = QLabel(f"{self._noise_offset_slider.value()} dB")
+        self._noise_offset_label.setFixedWidth(36)
+        self._noise_offset_slider.valueChanged.connect(self._on_noise_offset_changed)
+        noise_row.addWidget(lbl_offset)
+        noise_row.addWidget(self._noise_offset_slider)
+        noise_row.addWidget(self._noise_offset_label)
+        noise_row.addStretch()
+        root.addLayout(noise_row)
+
+
         # ── 第3行：前增益 ──
         gain_grid = QGridLayout()
         gain_grid.setSpacing(4)
@@ -1346,6 +1427,13 @@ class MainPanel(QWidget):
                     # AGC 开启：用当前前增益作为初始值
                     init_db = float(self._pre_gain)
                     th.processor.set_agc_enabled(True, init_db)
+                    if hasattr(self, '_agc_params_widget'): self._agc_params_widget.setVisible(True)
+                    if hasattr(self, '_agc_target_slider'):
+                        th.processor.set_agc_target(float(self._agc_target_slider.value()))
+                        th.processor.set_agc_attack_ms(float(self._agc_attack_slider.value()))
+                        th.processor.set_agc_release_ms(float(self._agc_release_slider.value()))
+                        th.processor.set_noise_gate_enabled(self._noise_gate_cb.isChecked())
+                        th.processor.set_noise_gate_offset_db(float(self._noise_offset_slider.value()))
                     # 禁用滑块，启动跟随定时器
                     self._pre_slider.setEnabled(False)
                     self._pre_slider.setStyleSheet("QSlider { opacity: 0.5; }")
@@ -1362,6 +1450,121 @@ class MainPanel(QWidget):
                     self._pre_slider.setStyleSheet("")
                 self._pre_slider.setValue(int(self._pre_gain))
                 self._pre_label.setText(f"{self._pre_gain:+.0f} dB")
+
+
+            if hasattr(self, "_agc_target_slider"):
+                th.processor.set_agc_target(float(self._agc_target_slider.value()))
+                th.processor.set_agc_attack_ms(float(self._agc_attack_slider.value()))
+                th.processor.set_agc_release_ms(float(self._agc_release_slider.value()))
+                th.processor.set_noise_gate_enabled(self._noise_gate_cb.isChecked())
+                th.processor.set_noise_gate_offset_db(float(self._noise_offset_slider.value()))
+    def _on_agc_target_changed(self, value):
+        self._agc_target_label.setText(f"{value} dB")
+        self._config.set("agc_target_db", value)
+        self._save()
+        if self._get_thread:
+            th = self._get_thread()
+            if th and hasattr(th, "processor") and th.processor:
+                th.processor.set_agc_target(float(value))
+
+    def _on_agc_attack_changed(self, value):
+        self._agc_attack_label.setText(f"{value} ms")
+        self._config.set("agc_attack_ms", value)
+        self._save()
+        if self._get_thread:
+            th = self._get_thread()
+            if th and hasattr(th, "processor") and th.processor:
+                th.processor.set_agc_attack_ms(float(value))
+
+    def _on_agc_release_changed(self, value):
+        self._agc_release_label.setText(f"{value} ms")
+        self._config.set("agc_release_ms", value)
+        self._save()
+        if self._get_thread:
+            th = self._get_thread()
+            if th and hasattr(th, "processor") and th.processor:
+                th.processor.set_agc_release_ms(float(value))
+
+    def _on_noise_gate_toggled(self, val):
+        self._config.set("noise_gate_enabled", val)
+        self._save()
+        if self._get_thread:
+            th = self._get_thread()
+            if th and hasattr(th, "processor") and th.processor:
+                th.processor.set_noise_gate_enabled(val)
+
+    def _on_noise_offset_changed(self, value):
+        self._noise_offset_label.setText(f"{value} dB")
+        self._config.set("noise_gate_offset_db", value)
+        self._save()
+        if self._get_thread:
+            th = self._get_thread()
+            if th and hasattr(th, "processor") and th.processor:
+                th.processor.set_noise_gate_offset_db(float(value))
+
+    def _update_noise_floor_display(self):
+        if self._get_thread:
+            th = self._get_thread()
+            if th and hasattr(th, "processor") and th.processor:
+                try:
+                    nf = th.processor.get_noise_floor_db()
+                    self._noise_floor_label.setText(f"{nf:.0f} dB")
+                except:
+                    pass
+
+    def _on_agc_target_changed(self, value):
+        self._agc_target_label.setText(f"{value} dB")
+        self._config.set("agc_target_db", value)
+        self._save()
+        if self._get_thread:
+            th = self._get_thread()
+            if th and hasattr(th, 'processor') and th.processor:
+                th.processor.set_agc_target(float(value))
+
+    def _on_agc_attack_changed(self, value):
+        self._agc_attack_label.setText(f"{value} ms")
+        self._config.set("agc_attack_ms", value)
+        self._save()
+        if self._get_thread:
+            th = self._get_thread()
+            if th and hasattr(th, 'processor') and th.processor:
+                th.processor.set_agc_attack_ms(float(value))
+
+    def _on_agc_release_changed(self, value):
+        self._agc_release_label.setText(f"{value} ms")
+        self._config.set("agc_release_ms", value)
+        self._save()
+        if self._get_thread:
+            th = self._get_thread()
+            if th and hasattr(th, 'processor') and th.processor:
+                th.processor.set_agc_release_ms(float(value))
+
+    def _on_noise_gate_toggled(self, val):
+        self._config.set("noise_gate_enabled", val)
+        self._save()
+        if self._get_thread:
+            th = self._get_thread()
+            if th and hasattr(th, 'processor') and th.processor:
+                th.processor.set_noise_gate_enabled(val)
+
+    def _on_noise_offset_changed(self, value):
+        self._noise_offset_label.setText(f"{value} dB")
+        self._config.set("noise_gate_offset_db", value)
+        self._save()
+        if self._get_thread:
+            th = self._get_thread()
+            if th and hasattr(th, 'processor') and th.processor:
+                th.processor.set_noise_gate_offset_db(float(value))
+
+    def _update_noise_floor_display(self):
+        if self._get_thread:
+            th = self._get_thread()
+            if th and hasattr(th, 'processor') and th.processor:
+                try:
+                    nf = th.processor.get_noise_floor_db()
+                    self._noise_floor_label.setText(f"{nf:.0f} dB")
+                except:
+                    pass
 
     def _on_compressor_toggled(self, val):
         self._config.set("compressor_enabled", val)
@@ -1590,6 +1793,13 @@ def _apply_agc_vad(proc, config, pre_gain, mp):
         proc.set_compressor_enabled(True)
     if config.get("agc_enabled", False):
         proc.set_agc_enabled(True, float(pre_gain))
+    if mp and hasattr(mp, '_noise_gate_cb'):
+        proc.set_noise_gate_enabled(mp._noise_gate_cb.isChecked())
+        if mp._noise_offset_slider:
+            proc.set_noise_gate_offset_db(float(mp._noise_offset_slider.value()))
+    if mp and hasattr(mp, "_noise_gate_cb"):
+        proc.set_noise_gate_enabled(mp._noise_gate_cb.isChecked())
+        proc.set_noise_gate_offset_db(float(mp._noise_offset_slider.value()))
         if mp and hasattr(mp, '_agc_poll_timer'):
             mp._agc_poll_timer.start(16)
     if config.get("vad_enabled", False):

@@ -56,6 +56,7 @@ typedef struct DenoiseProcessor DenoiseProcessor;
 typedef struct TseProcessor   TseProcessor;
 typedef struct AecProcessor   AecProcessor;
 typedef struct AudioProcessor AudioProcessor;
+typedef struct NoiseFloorTracker NoiseFloorTracker;
 typedef struct Resampler      Resampler;
 typedef struct RingBuffer     RingBuffer;
 
@@ -81,6 +82,10 @@ void           agc_set_enabled(AgcController*, bool enabled, float initial_gain_
 bool           agc_is_enabled(const AgcController*);
 void           agc_set_target(AgcController*, float dbfs);
 float          agc_target_dbfs(const AgcController*);
+void           agc_set_attack_ms(AgcController*, float ms);
+float          agc_get_attack_ms(const AgcController*);
+void           agc_set_release_ms(AgcController*, float ms);
+float          agc_get_release_ms(const AgcController*);
 
 /* ─────────────────────── Compressor ─────────────────────── */
 Compressor*    compressor_new(float threshold_db, float ratio, float attack_ms,
@@ -169,6 +174,15 @@ bool            audio_processor_is_recording_enabled(AudioProcessor*);
 float           audio_processor_get_agc_gain_db(AudioProcessor*);
 void            audio_processor_set_agc_target(AudioProcessor*, float);
 float           audio_processor_get_agc_target(AudioProcessor*);
+void            audio_processor_set_agc_attack_ms(AudioProcessor*, float);
+float           audio_processor_get_agc_attack_ms(AudioProcessor*);
+void            audio_processor_set_agc_release_ms(AudioProcessor*, float);
+float           audio_processor_get_agc_release_ms(AudioProcessor*);
+void            audio_processor_set_noise_gate_enabled(AudioProcessor*, bool);
+bool            audio_processor_is_noise_gate_enabled(AudioProcessor*);
+void            audio_processor_set_noise_gate_offset_db(AudioProcessor*, float);
+float           audio_processor_get_noise_gate_offset_db(AudioProcessor*);
+float           audio_processor_get_noise_floor_db(AudioProcessor*);
 void            audio_processor_set_compressor_enabled(AudioProcessor*, bool);
 bool            audio_processor_is_compressor_enabled(AudioProcessor*);
 void            audio_processor_set_compressor_threshold(AudioProcessor*, float);
